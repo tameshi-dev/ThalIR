@@ -1,0 +1,36 @@
+[package]
+name = "thalir-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Command-line interface for ThalIR - Solidity to IR compiler"
+keywords = ["solidity", "compiler", "ir", "security", "analysis"]
+categories = ["command-line-utilities", "development-tools"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[[bin]]
+name = "thalir"
+path = "src/main.rs"
+
+[dependencies]
+thalir-core = { path = "../thalir-core" }
+thalir-emit = { path = "../thalir-emit" }
+thalir-transform = { path = "../thalir-transform" }
+thalir-parser = { path = "../thalir-parser" }
+clap = { version = "4.5", features = ["derive"] }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+colored.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"

@@ -1,0 +1,28 @@
+[package]
+name = "thalir-parser"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Parser for ThalIR files"
+keywords = ["solidity", "parser", "ir", "pest"]
+categories = ["compilers", "parsing"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+pest.workspace = true
+pest_derive.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+walkdir = "2.4"
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+insta.workspace = true

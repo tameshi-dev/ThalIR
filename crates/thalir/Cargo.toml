@@ -1,0 +1,23 @@
+[package]
+name = "thalir"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "ThalIR - Solidity intermediate representation for smart contract security auditing"
+keywords = ["solidity", "compiler", "ir", "security", "analysis"]
+categories = ["compilers", "development-tools"]
+readme = "../../README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+thalir-core = { path = "../thalir-core" }
+thalir-emit = { path = "../thalir-emit" }
+thalir-parser = { path = "../thalir-parser" }
+thalir-transform = { path = "../thalir-transform" }

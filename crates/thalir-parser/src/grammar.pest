@@ -1,0 +1,617 @@
+// Thalir IR Grammar (Cranelift-based)
+// Version: 0.1.0
+// Based on: Cranelift 0.113.1 textual IR format
+
+// ============================================================================
+// WHITESPACE & COMMENTS
+// ============================================================================
+
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT = _{ ";" ~ (!"\n" ~ ANY)* }
+
+// ============================================================================
+// LEXICAL TOKENS
+// ============================================================================
+
+// --- Delimiters ---
+lparen = { "(" }
+rparen = { ")" }
+lbrace = { "{" }
+rbrace = { "}" }
+lbracket = { "[" }
+rbracket = { "]" }
+comma = { "," }
+dot = { "." }
+colon = { ":" }
+equal = { "=" }
+bang = { "!" }
+at = { "@" }
+arrow = { "->" }
+
+// --- Numbers ---
+// Integer: decimal or hex, with optional sign and underscores
+integer = @{
+    ("-" | "+")? ~ (
+        "0x" ~ ASCII_HEX_DIGIT ~ (ASCII_HEX_DIGIT | "_")* |
+        ASCII_DIGIT ~ (ASCII_DIGIT | "_")*
+    )
+}
+
+// Float: decimal, hex with exponent, or special values
+float = @{
+    "-"? ~ (
+        // Hex float: 0x1.fp-3
+        "0x" ~ ASCII_HEX_DIGIT+ ~ "." ~ ASCII_HEX_DIGIT+ ~ ("p" ~ "-"? ~ ASCII_DIGIT+)? |
+        // Decimal float: 1.5, 1.5e-3
+        ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* ~ (("e" | "E") ~ "-"? ~ ASCII_DIGIT+)? |
+        // NaN with optional payload
+        "NaN" ~ (":" ~ "0x" ~ ASCII_HEX_DIGIT+)? |
+        "sNaN" ~ (":" ~ "0x" ~ ASCII_HEX_DIGIT+)? |
+        // Infinity
+        "Inf"
+    )
+}
+
+// Hex sequence (for byte data): #89AF
+hex_seq = @{ "#" ~ ASCII_HEX_DIGIT+ }
+
+// String literals (no escape sequences)
+string_lit = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+
+// Source location: @00c7
+source_loc = @{ "@" ~ ASCII_HEX_DIGIT+ }
+
+// --- Identifiers & References ---
+// Generic identifier (opcodes, keywords, names)
+ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Named value: %name, %0, %x3, %super._update, %$getBeacon, %Type(arg).method
+// Support qualified names with dots and $
+name = @{ "%" ~ (ASCII_ALPHANUMERIC | "_" | "." | "$")+ }
+
+// Qualified name for function calls (non-atomic to allow proper backtracking)
+qualified_name = { base_name ~ member_access+ }
+
+// Value reference: v0, v123
+value_ref = @{ "v" ~ ASCII_DIGIT+ }
+
+// Block reference: block0, block123
+block_ref = @{ "block" ~ ASCII_DIGIT+ }
+
+// Stack slot: ss3
+stack_slot = @{ "ss" ~ ASCII_DIGIT+ }
+
+// Dynamic stack slot: dss4
+dyn_stack_slot = @{ "dss" ~ ASCII_DIGIT+ }
+
+// Dynamic type: dt5
+dyn_type = @{ "dt" ~ ASCII_DIGIT+ }
+
+// Global value: gv3
+global_value = @{ "gv" ~ ASCII_DIGIT+ }
+
+// Memory type: mt0
+mem_type = @{ "mt" ~ ASCII_DIGIT+ }
+
+// Constant: const2
+constant = @{ "const" ~ ASCII_DIGIT+ }
+
+// Function reference: fn2
+func_ref = @{ "fn" ~ ASCII_DIGIT+ }
+
+// Signature reference: sig2
+sig_ref = @{ "sig" ~ ASCII_DIGIT+ }
+
+// User reference: u345
+user_ref = @{ "u" ~ ASCII_DIGIT+ }
+
+// User name reference: userextname345
+user_name_ref = @{ "userextname" ~ ASCII_DIGIT+ }
+
+// A base name for a callable expression, without dots or parens
+base_name = @{ "%" ~ (ASCII_ALPHANUMERIC | "_" | "$")+ }
+
+// A member access, like .myMethod
+member_access = { dot ~ ident }
+
+// Arguments for a cast, e.g., (v1, v2)
+cast_args = { lparen ~ (operand ~ (comma ~ operand)*)? ~ rparen }
+
+// A full callable expression, handling casts and member access
+// e.g., %MyType(v1).method
+callable_expr = { base_name ~ cast_args? ~ member_access* }
+
+
+// Exception table: ex123
+exception_table = @{ "ex" ~ ASCII_DIGIT+ }
+
+// Exception tag: tag123
+exception_tag = @{ "tag" ~ ASCII_DIGIT+ }
+
+// Try-call return: ret123
+try_ret = @{ "ret" ~ ASCII_DIGIT+ }
+
+// Try-call exception: exn123
+try_exn = @{ "exn" ~ ASCII_DIGIT+ }
+
+// Thalir-specific identifiers
+// Storage slot: slot0, slot1
+storage_slot = @{ "slot" ~ ASCII_DIGIT+ }
+
+// Mapping reference: map0, map1
+mapping_ref = @{ "map" ~ ASCII_DIGIT+ }
+
+// Context variable (as literal strings)
+context_var = @{
+    "msg.sender" | "msg.value" | "msg.data" | "msg.sig" |
+    "block.number" | "block.timestamp" | "block.difficulty" | "block.gaslimit" |
+    "block.coinbase" | "block.chainid" | "block.basefee" |
+    "tx.origin" | "tx.gasprice" |
+    "gasleft" | "address(this)" | "address(this).balance"
+}
+
+// Event reference: event0, event1
+event_ref = @{ "event" ~ ASCII_DIGIT+ }
+
+// ============================================================================
+// LLM ANNOTATION EXTENSIONS (Optional)
+// ============================================================================
+
+// Position marker: [0], [1], [2] (optional instruction prefix)
+position_marker = @{ "[" ~ ASCII_DIGIT+ ~ "]" }
+
+// Visual cue emoji markers (optional instruction prefix)
+visual_cue = @{
+    "🔴" | "🟡" | "⚠️" | "✓" | "🟢" | "❌" |
+    "🎣" | "🔥" | "💀" | "⚡" | "⏰" | "🎲"
+}
+
+// ASCII visual cue alternatives (for terminal compatibility)
+visual_cue_ascii = @{
+    "[EXTERNAL_CALL]" | "[STATE_WRITE]" | "[WARNING]" |
+    "[CHECKED]" | "[SAFE]" | "[UNSAFE]" |
+    "[TX_ORIGIN]" | "[DELEGATECALL]" | "[SELFDESTRUCT]" |
+    "[UNCHECKED]" | "[TIMESTAMP]" | "[BLOCK_VAR]"
+}
+
+// Combined visual marker
+visual_marker = { visual_cue | visual_cue_ascii }
+
+// Analysis comment patterns (optional, for LLM context)
+analysis_comment = {
+    ";" ~ "###" ~ "Function" ~ ":" ~ (!"\n" ~ ANY)* |
+    ";" ~ "⚠️" ~ "SECURITY" ~ "ANALYSIS" ~ ":" ~ (!"\n" ~ ANY)* |
+    ";" ~ "⚠️" ~ "ORDERING" ~ "ANALYSIS" ~ ":" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "⚠️" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "⚡" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "⏰" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "🎲" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "External" ~ "call" ~ "at" ~ "position" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "State" ~ "modification" ~ "at" ~ "position" ~ (!"\n" ~ ANY)* |
+    ";" ~ "-" ~ "[" ~ ASCII_DIGIT+ ~ "]" ~ ("<" | ">") ~ "[" ~ ASCII_DIGIT+ ~ "]" ~ (!"\n" ~ ANY)*
+}
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+// Scalar types (including Thalir/Solidity types)
+// Order: longest first to avoid partial matches (i256 before i16, etc.)
+// Scalar integer types - support all bit widths from i1 to i256 (any number)
+// Allow any bit width for maximum flexibility
+ty_int = @{
+    "i" ~ ASCII_DIGIT+
+}
+
+// Fixed-size bytes types: bytes1, bytes2, ..., bytes32
+ty_bytes_fixed = @{
+    "bytes" ~ (
+        ("3" ~ ("0" | "1" | "2")) |  // bytes30, bytes31, bytes32
+        ("2" ~ ASCII_DIGIT) |         // bytes20-bytes29
+        ("1" ~ ASCII_DIGIT) |         // bytes10-bytes19
+        ASCII_DIGIT                   // bytes1-bytes9
+    )
+}
+
+ty_scalar = {
+    ty_int |
+    ty_bytes_fixed |  // Thalir: fixed-size bytes (bytes1-bytes32)
+    "b256" | "b8" | "b1" |  // Thalir: boolean and bytes types
+    "f128" | "f64" | "f32" | "f16" |
+    "address" | "bytes" | "string"  // Thalir: Solidity primitive types
+}
+
+// Vector types: i32x4, f64x2
+ty_vector = @{
+    ("i8" | "i16" | "i32" | "i64" | "i128" | "i160" | "i256" |
+     "f16" | "f32" | "f64" | "f128") ~
+    "x" ~ ASCII_DIGIT+
+}
+
+// Array types: [i256], [bytes4], etc.
+ty_array = {
+    "[" ~ ty_base ~ "]"
+}
+
+// Base type for arrays (non-array types to avoid double nesting)
+ty_base = { ty_mapping | ty_scalar | ty_vector | dyn_type }
+
+// Type (array, scalar, vector, dynamic, or mapping)
+// Order matters: array and mapping first (contain delimiters), then vector (atomic), then scalar
+ty = { ty_array | ty_mapping | ty_scalar | ty_vector | dyn_type }
+
+// Mapping type: mapping(keyType => valueType)
+// Use ty_simple inside to avoid recursion issues
+ty_mapping = {
+    "mapping" ~ lparen ~ ty_simple ~ "=>" ~ ty_simple ~ rparen
+}
+
+// Simple types (for use inside mappings and arrays)
+// Allow nested mappings and arrays!
+ty_simple = { ty_array | ty_mapping | ty_scalar | ty_vector | dyn_type }
+
+// ============================================================================
+// VALUES & IMMEDIATES
+// ============================================================================
+
+immediate = { float | integer }
+
+value = { value_ref | name }
+
+// ============================================================================
+// TEST DIRECTIVES (optional, for .clif files)
+// ============================================================================
+
+test_directive = { "test" ~ (!"\n" ~ ANY)* }
+target_spec = { ("target" | "set") ~ (!"\n" ~ ANY)* }
+
+// ============================================================================
+// FUNCTION & MODULE STRUCTURE
+// ============================================================================
+
+// Module: top-level container
+// Support both raw functions and contract wrapper
+module = {
+    SOI ~
+    (contract_def | test_directive | target_spec | function)* ~
+    EOI
+}
+
+// Contract definition (Thalir format): contract Name { ... }
+contract_def = {
+    "contract" ~ ident ~ lbrace ~
+    contract_body ~
+    rbrace
+}
+
+contract_body = {
+    (storage_layout | function)*
+}
+
+// Storage layout comment: // Storage Layout
+storage_layout = {
+    "//" ~ "Storage" ~ "Layout" ~
+    storage_slot_decl*
+}
+
+storage_slot_decl = {
+    "slot" ~ integer ~ equal ~ ident ~ colon ~ ty
+}
+
+// Function signature
+param = { ty }
+param_list = { param? ~ (comma ~ param)* }
+return_type = { ty }
+signature = { lparen ~ param_list ~ rparen ~ (arrow ~ return_type)? }
+
+// Function definition
+// Support both Cranelift format and Thalir contract format with visibility
+function = {
+    "function" ~ name ~ signature ~ visibility_modifier? ~ mutability_modifier? ~ lbrace ~
+    entity_decl* ~
+    block* ~
+    rbrace
+}
+
+// Visibility modifiers (Thalir)
+visibility_modifier = { "public" | "private" | "internal" | "external" }
+
+// Mutability modifiers (Thalir)
+mutability_modifier = { "view" | "pure" | "payable" }
+
+// ============================================================================
+// ENTITY DECLARATIONS
+// ============================================================================
+
+// Global value declaration
+entity_gv = {
+    global_value ~ equal ~
+    (
+        "vmctx" |
+        ("load" ~ dot ~ ty ~ mem_flag* ~ global_value ~ ("+" ~ integer)?)
+    )
+}
+
+// Function declaration
+entity_fn = {
+    func_ref ~ equal ~ name ~ signature
+}
+
+// Signature declaration
+entity_sig = {
+    sig_ref ~ equal ~ signature
+}
+
+// Stack slot declaration
+entity_ss = {
+    stack_slot ~ equal ~
+    "stack_slot" ~ integer ~ (comma ~ ident)*
+}
+
+// Dynamic stack slot declaration
+entity_dss = {
+    dyn_stack_slot ~ equal ~
+    "dynamic_stack_slot" ~ dyn_type
+}
+
+// Constant declaration
+entity_const = {
+    constant ~ equal ~
+    ty ~ immediate
+}
+
+entity_decl = {
+    entity_gv | entity_fn | entity_sig | entity_ss | entity_dss | entity_const
+}
+
+// ============================================================================
+// BLOCKS
+// ============================================================================
+
+// Block parameter: v0: i32
+block_param = { value ~ colon ~ ty }
+block_param_list = { block_param ~ (comma ~ block_param)* }
+block_params = { lparen ~ block_param_list? ~ rparen }
+
+// Block label: block0, block1(v0: i32, v1: i32)
+block_label = { block_ref ~ block_params? ~ colon }
+
+// Block definition (with optional analysis comments)
+block = {
+    analysis_comment* ~    // Optional LLM analysis comments before block
+    block_label ~
+    instruction*
+}
+
+// ============================================================================
+// INSTRUCTIONS
+// ============================================================================
+
+// Result list: v2 = or v1, v2 =
+result = { value }
+result_list = { result ~ (comma ~ result)* ~ equal }
+
+// Operands
+mem_operand = { value ~ ("+" ~ integer)? }
+block_arg = { block_ref ~ lparen ~ (value ~ (comma ~ value)*)? ~ rparen }
+
+operand = {
+    block_arg |
+    mem_operand |
+    inline_const |     // Thalir: iconst.i256 0
+    global_value |
+    func_ref |
+    sig_ref |
+    stack_slot |
+    dyn_stack_slot |
+    constant |
+    storage_slot |     // Thalir: slot0
+    mapping_ref |      // Thalir: map0
+    event_ref |        // Thalir: event0
+    context_var |      // Thalir: msg.sender, etc.
+    string_lit |       // For messages in require/assert/revert
+    immediate |
+    value |
+    ty |
+    ident
+}
+
+// Inline constant: iconst.i256 42, fconst.f64 3.14
+inline_const = { ("iconst" | "fconst" | "bconst") ~ ty_suffix ~ immediate }
+
+operand_list = { operand ~ (comma ~ operand)* }
+
+// Memory flags: notrap, readonly, aligned, little, big
+mem_flag = { "notrap" | "readonly" | "aligned" | "little" | "big" }
+mem_flags = { mem_flag+ }
+
+// Type suffix: .i32, .f64
+ty_suffix = { dot ~ ty }
+
+// Instruction annotations
+inst_annot = { source_loc | mem_flags }
+
+// Opcodes - Binary arithmetic
+opcode_binop = {
+    "iadd" | "isub" | "imul" | "udiv" | "sdiv" | "urem" | "srem" |
+    "band" | "bor" | "bxor" | "bnot" |
+    "ishl" | "ushr" | "sshr" | "rotl" | "rotr" |
+    "fadd" | "fsub" | "fmul" | "fdiv" | "fmin" | "fmax" |
+    "iadd_imm" | "imul_imm" | "udiv_imm" | "sdiv_imm" | "urem_imm" | "srem_imm" |
+    "band_imm" | "bor_imm" | "bxor_imm" | "ishl_imm" | "ushr_imm" | "sshr_imm" |
+    "rotl_imm" | "rotr_imm"
+}
+
+// Opcodes - Comparison
+opcode_cmp = {
+    "icmp" | "icmp_imm" | "fcmp"
+}
+
+// Opcodes - Memory
+opcode_load = { "load" }
+opcode_store = { "store" }
+
+// Opcodes - Control flow
+opcode_branch = {
+    "brif" | "brz" | "brnz" | "br_icmp" |
+    "brff" | "brfnz" | "br_fcmp" |
+    "jump" | "fallthrough" | "return" | "return_call" | "return_call_indirect" |
+    "br_table"
+}
+
+opcode_call = { "call" | "call_indirect" | "call_ext" | "delegatecall" | "staticcall" }
+
+// Opcodes - Conversions & Extensions
+opcode_convert = {
+    "uextend" | "sextend" | "fpromote" | "fdemote" |
+    "fcvt_to_uint" | "fcvt_to_sint" | "fcvt_from_uint" | "fcvt_from_sint" |
+    "fcvt_to_uint_sat" | "fcvt_to_sint_sat" |
+    "ireduce" | "bitcast" | "scalar_to_vector" |
+    "bmask" | "ireduce" | "uextend" | "sextend" |
+    "fpromote" | "fdemote" | "fvdemote" | "fvpromote_low" |
+    "fcvt_to_uint" | "fcvt_to_sint" | "fcvt_from_uint" | "fcvt_from_sint" |
+    "fcvt_low_from_sint" | "fcvt_to_uint_sat" | "fcvt_to_sint_sat"
+}
+
+// Opcodes - Vector operations
+opcode_vector = {
+    "splat" | "swizzle" | "shuffle" | "insertlane" | "extractlane" |
+    "vconst" | "vselect" | "vany_true" | "vall_true" | "vhigh_bits" |
+    "iadd_pairwise" | "widening_pairwise_dot_product_s" |
+    "uunarrow" | "snarrow" | "unarrow" | "snarrow" |
+    "swiden_low" | "swiden_high" | "uwiden_low" | "uwiden_high" |
+    "iadd_sat_u" | "isub_sat_u" | "iadd_sat_s" | "isub_sat_s" |
+    "avg_round_u" | "avg_round_s"
+}
+
+// Opcodes - Thalir-specific (Solidity/EVM extensions)
+opcode_thalir = {
+    // Storage operations
+    "storage_load" | "storage_store" | "storage_delete" |
+
+    // Mapping operations
+    "mapping_load" | "mapping_store" |
+
+    // Array operations
+    "array_load" | "array_store" | "array_length" | "array_push" | "array_pop" |
+
+    // Context access
+    "get_context" |
+
+    // Cryptographic operations
+    "keccak256" | "sha256" | "ripemd160" | "ecrecover" |
+
+    // Contract operations
+    "call_ext" | "delegatecall" | "staticcall" |
+    "create" | "create2" | "selfdestruct" |
+    "get_balance" | "get_code" | "get_codesize" | "get_codehash" |
+
+    // Event emission
+    "emit_event" | "log" | "log0" | "log1" | "log2" | "log3" | "log4" |
+
+    // Assertions
+    "require" | "assert" | "revert" |
+
+    // Checked arithmetic (Solidity 0.8+)
+    "checked_add" | "checked_sub" | "checked_mul" | "checked_div"
+}
+
+// Opcodes - Other (including old-style constants for backward compat)
+opcode_other = {
+    "select" | "selectif" | "selectif_spectre_guard" |
+    "copy" | "fill" | "fill_nop" | "regmove" | "spill" | "reload" |
+    "iconst" | "f32const" | "f64const" | "f128const" | "bconst" | "vconst" |
+    "null" | "nop" | "trap" | "resumable_trap" | "debugtrap" |
+    "get_pinned_reg" | "set_pinned_reg" |
+    "fence" | "is_null" | "is_invalid" |
+    "trueif" | "trueff" | "bitrev" | "clz" | "cls" | "ctz" |
+    "bswap" | "popcnt" | "fma" | "fneg" | "fabs" | "fcopysign" |
+    "fceil" | "ffloor" | "ftrunc" | "fnearest" | "fsqrt" |
+    "stack_addr" | "dynamic_stack_addr" |
+    "global_value" | "symbol_value" | "tls_value" |
+    "get_frame_pointer" | "get_stack_pointer" | "get_return_address" |
+    "atomic_rmw" | "atomic_cas" | "atomic_load" | "atomic_store" |
+    "extract_vector" | "get_pinned_reg" | "set_pinned_reg" | "icmp" |
+    "ifcmp" | "ifcmp_imm" | "iadd_ifcout" | "iadd_ifcin" | "iadd_ifcarry" |
+    "isub_ifbout" | "isub_ifbin" | "isub_ifborrow"
+}
+
+// All opcodes (ident must NOT match block_ref to avoid confusion)
+opcode = {
+    opcode_binop | opcode_cmp | opcode_load | opcode_store |
+    opcode_branch | opcode_call | opcode_convert | opcode_vector |
+    opcode_thalir | opcode_other |
+    !block_ref ~ ident  // Negative lookahead: don't match if it's a block reference
+}
+
+// Comparison condition codes
+cmp_cond = {
+    "eq" | "ne" | "slt" | "sle" | "sgt" | "sge" |
+    "ult" | "ule" | "ugt" | "uge" |
+    "of" | "nof"
+}
+
+fcmp_cond = {
+    "ord" | "uno" | "eq" | "ne" | "lt" | "le" | "gt" | "ge" |
+    "ueq" | "une" | "ult" | "ule" | "ugt" | "uge" | "one" | "olt" | "ole" | "ogt" | "oge"
+}
+
+// Instruction families
+
+// Binary operations: iadd v0, v1
+inst_binop = { opcode_binop ~ operand ~ comma ~ operand }
+
+// Comparison: icmp eq v0, v1
+inst_cmp = { opcode_cmp ~ cmp_cond ~ operand ~ comma ~ operand }
+inst_fcmp = { "fcmp" ~ fcmp_cond ~ operand ~ comma ~ operand }
+
+// Load: load.i32 v2+8
+inst_load = { opcode_load ~ ty_suffix? ~ mem_operand ~ mem_flags? }
+
+// Store: store.i32 v1, v2+8
+inst_store = { opcode_store ~ ty_suffix? ~ operand ~ comma ~ mem_operand ~ mem_flags? }
+
+// Branch: brif v2, block1(v0), block2(v1)
+inst_brif = { "brif" ~ operand ~ comma ~ block_arg ~ comma ~ block_arg }
+inst_jump = { "jump" ~ block_arg }
+inst_return = { "return" ~ operand? }
+
+// Optional modifiers like {value: X} before call arguments
+call_modifier = { lbrace ~ (!(rbrace) ~ ANY)* ~ rbrace }
+
+// Final call argument list, e.g. ()
+arg_list_call = { lparen ~ (operand ~ (comma ~ operand)*)? ~ rparen ~ !dot }
+
+// Call: call fn0(v0), call %mycontract(addr).method{value: 1}()
+inst_call = { opcode_call ~ (callable_expr | func_ref) ~ call_modifier? ~ arg_list_call }
+
+// Conversion: uextend.i64 v0
+inst_convert = { opcode_convert ~ ty_suffix? ~ operand }
+
+// Generic instruction with optional type suffix
+inst_generic = { opcode ~ ty_suffix? ~ operand_list? }
+
+// Expression tail - allow arbitrary tokens after an instruction (for extended syntax like ==, ||, .method(), etc.)
+expr_tail = { (!("\n" | rbrace | block_ref) ~ ANY)* }
+
+// Generic instruction (with optional LLM annotations)
+instruction = {
+    position_marker? ~    // Optional [N] position marker
+    visual_marker? ~      // Optional 🔴/🟡 visual cue
+    result_list? ~
+    (
+        inst_brif | inst_jump | inst_return |
+        inst_call |
+        inst_load | inst_store |
+        inst_cmp | inst_fcmp |
+        inst_binop |
+        inst_convert |
+        inst_generic
+    ) ~
+    inst_annot* ~
+    expr_tail?
+}
+
+// ============================================================================
+// END OF GRAMMAR
+// ============================================================================

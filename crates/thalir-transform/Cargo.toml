@@ -1,0 +1,28 @@
+[package]
+name = "thalir-transform"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Solidity to ThalIR transformation"
+keywords = ["solidity", "compiler", "ir", "transformer"]
+categories = ["compilers", "development-tools"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+thalir-core = { path = "../thalir-core" }
+tree-sitter = "0.25"
+tree-sitter-solidity = { package = "tree-sitter-solidity-traverse", version = "1.2.13-4e938a4" }
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+chrono = "0.4"
+num-bigint = "0.4"
+num-traits = "0.2"
+tiny-keccak = { version = "2.0", features = ["keccak"] }

@@ -1,0 +1,27 @@
+[package]
+name = "thalir-emit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Emitters for ThalIR - textual and annotated output"
+keywords = ["solidity", "compiler", "ir", "emitter"]
+categories = ["compilers", "development-tools"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+thalir-core = { path = "../thalir-core" }
+anyhow = "1.0"
+colored = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+num-bigint = "0.4"
