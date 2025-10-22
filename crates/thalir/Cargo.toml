@@ -17,7 +17,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-thalir-core = { path = "../thalir-core" }
-thalir-emit = { path = "../thalir-emit" }
-thalir-parser = { path = "../thalir-parser" }
-thalir-transform = { path = "../thalir-transform" }
+thalir-core = { version = "0.1.0", path = "../thalir-core" }
+thalir-emit = { version = "0.1.0", path = "../thalir-emit" }
+thalir-parser = { version = "0.1.0", path = "../thalir-parser" }
+thalir-transform = { version = "0.1.0", path = "../thalir-transform" }

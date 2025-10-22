@@ -16,7 +16,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-thalir-core = { path = "../thalir-core" }
+thalir-core = { version = "0.1.0", path = "../thalir-core" }
 anyhow = "1.0"
 colored = "2.0"
 serde = { version = "1.0", features = ["derive"] }

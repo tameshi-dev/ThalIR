@@ -20,10 +20,10 @@ name = "thalir"
 path = "src/main.rs"
 
 [dependencies]
-thalir-core = { path = "../thalir-core" }
-thalir-emit = { path = "../thalir-emit" }
-thalir-transform = { path = "../thalir-transform" }
-thalir-parser = { path = "../thalir-parser" }
+thalir-core = { version = "0.1.0", path = "../thalir-core" }
+thalir-emit = { version = "0.1.0", path = "../thalir-emit" }
+thalir-transform = { version = "0.1.0", path = "../thalir-transform" }
+thalir-parser = { version = "0.1.0", path = "../thalir-parser" }
 clap = { version = "4.5", features = ["derive"] }
 anyhow.workspace = true
 serde.workspace = true

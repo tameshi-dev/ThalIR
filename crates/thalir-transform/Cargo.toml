@@ -16,7 +16,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-thalir-core = { path = "../thalir-core" }
+thalir-core = { version = "0.1.0", path = "../thalir-core" }
 tree-sitter = "0.25"
 tree-sitter-solidity = { package = "tree-sitter-solidity-traverse", version = "1.2.13-4e938a4" }
 anyhow = "1.0"
